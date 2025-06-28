@@ -1,1 +1,72 @@
-/* Copied from src/styles.css */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #000;
+}
+
+#webgl-canvas {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    z-index: 0;
+}
+
+/* Buttons */
+button {
+    position: absolute;
+    left: 10px;
+    z-index: 10;
+    padding: 5px 10px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+#toggle-curve {
+    top: 10px;
+}
+
+#visualize-algorithm {
+    top: 50px;
+}
+
+#animate-algorithm {
+    top: 90px;
+}
+
+#toggle-labels {
+    top: 130px;
+}
+
+#animate-with-labels {
+    top: 170px;
+}
+
+/* Checkbox and Slider */
+#manual-interpolation-container {
+    position: absolute;
+    top: 200px;
+    left: 10px;
+    z-index: 10;
+}
+
+#interpolation-slider {
+    display: none; /* Initially hidden */
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+}
+
+#latex-box {
+    /* The JS already sets these, but you can override or add more here */
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    pointer-events: none; /* So it doesn't block mouse events */
+}
