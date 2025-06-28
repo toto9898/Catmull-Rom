@@ -1,0 +1,14 @@
+{
+  "name": "threejs-static-website",
+  "version": "1.0.0",
+  "description": "A static website using Three.js to display a rectangle.",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "live-server src"
+  },
+  "dependencies": {
+    "three": "^0.152.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
