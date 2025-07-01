@@ -1,4 +1,33 @@
-import { animateCatmullRomSecondControlPoint } from './visualization.js'; // Make sure this is exported
+import { animateCatmullRomControlPoint } from './catmullRomAnimation.js'; // Make sure this is exported
+import { createBezierCurve } from './curves.js';
+import { animateDeCasteljau } from './visualization.js';
+
+const bezierPointsMeshes = [];
+
+// Import the main curve line reference from visualization.js
+import { curveSegmentLine, setCurveLine } from './visualization.js';
+
+// Utility to remove all bezierPointsMeshes and the main curve line from the scene
+function clearBezierPointsMeshes(scene) {
+    if (!scene) return;
+    for (const mesh of bezierPointsMeshes) {
+        if (mesh && mesh.parent === scene) {
+            scene.remove(mesh);
+        }
+    }
+    bezierPointsMeshes.length = 0;
+    // Remove the main curve line robustly, always from both parent and scene
+    if (curveSegmentLine) {
+        const parent = curveSegmentLine.parent;
+        if (parent && parent !== scene) {
+            parent.remove(curveSegmentLine);
+        }
+        if (scene.children.includes(curveSegmentLine)) {
+            scene.remove(curveSegmentLine);
+        }
+        setCurveLine(null);
+    }
+}
 
 /**
  * Sets up mouse interaction for dragging control points and hover indication.
@@ -34,7 +63,18 @@ export function setupInteraction(
     let contextMenuDiv = null;
     let contextMenuTargetIndex = null;
 
+    function isInteractionLocked() {
+        return window.__globalAnimationLock && window.__globalAnimationLock._locked;
+    }
+
     function onMouseDown(event) {
+        // Only allow interaction with pause button during pause
+        if (window.__globalAnimationState && window.__globalAnimationState.paused) {
+            if (!(event.target && event.target.id === 'global-stop-btn')) return;
+        }
+        if (event.target && event.target.id === 'global-stop-btn') return;
+        if (isInteractionLocked()) return;
+        clearBezierPointsMeshes(scene);
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
@@ -45,6 +85,12 @@ export function setupInteraction(
     }
 
     function onMouseMove(event) {
+        // Only allow interaction with pause button during pause
+        if (window.__globalAnimationState && window.__globalAnimationState.paused) {
+            if (!(event.target && event.target.id === 'global-stop-btn')) return;
+        }
+        if (event.target && event.target.id === 'global-stop-btn') return;
+        if (isInteractionLocked()) return;
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
@@ -83,11 +129,29 @@ export function setupInteraction(
         }
     }
 
-    function onMouseUp() {
+    function onMouseUp(event) {
+        // Only allow interaction with pause button during pause
+        if (window.__globalAnimationState && window.__globalAnimationState.paused) {
+            if (!(event && event.target && event.target.id === 'global-stop-btn')) return;
+        }
+        if (event && event.target && event.target.id === 'global-stop-btn') return;
+        if (isInteractionLocked()) return;
+        clearBezierPointsMeshes(scene);
         selectedPoint = null;
     }
 
+    let suppressNextCanvasClick = false;
     function onCanvasClick(event) {
+        if (window.__globalAnimationState && window.__globalAnimationState.paused) {
+            if (!(event.target && event.target.id === 'global-stop-btn')) return;
+        }
+        if (isInteractionLocked()) return;
+        if (event.target && event.target.id === 'global-stop-btn') return;
+        clearBezierPointsMeshes(scene);
+        if (suppressNextCanvasClick) {
+            suppressNextCanvasClick = false;
+            return;
+        }
         if (!controlPoints || !scene || !canvas) return;
         // Prevent adding if hovering a point
         if (isHoveringPoint) return;
@@ -122,6 +186,8 @@ export function setupInteraction(
 
     // --- Ctrl+Z to remove last added point ---
     function onKeyDown(event) {
+        if (isInteractionLocked()) return;
+        clearBezierPointsMeshes(scene);
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
             // Only allow removing if more than the initial points remain
             if (controlPoints && controlPointMeshes && controlPoints.length > 0 && controlPointMeshes.length > 0) {
@@ -140,7 +206,10 @@ export function setupInteraction(
 
     // --- Context Menu for Control Points ---
     function onContextMenu(event) {
-        console.log('Context menu event fired'); // Add this
+        // Allow pause button to work
+        if (event.target && event.target.id === 'global-stop-btn') return;
+        if (isInteractionLocked()) return;
+        clearBezierPointsMeshes(scene);
         event.preventDefault();
 
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -182,14 +251,52 @@ export function setupInteraction(
                 document.body.removeChild(contextMenuDiv);
                 contextMenuDiv = null;
                 const i = contextMenuTargetIndex;
-                if (i > 0 && i < controlPoints.length - 1) {
-                    const P0 = controlPoints[i - 1];
-                    const P1 = controlPoints[i];
-                    const P2 = controlPoints[i + 1];
-                    animateCatmullRomSecondControlPoint(scene, P0, P1, P2, yellowPointMeshes, i);
-                } else {
-                    alert('Need at least one point before and after to animate tangent.');
+                // Handle edge cases for i == 0 and i == len-2
+                const len = controlPoints.length;
+                if (len < 4) {
+                    alert('Need at least four points to animate tangent.');
+                    return;
                 }
+                if (i < 0 || i > len - 2) {
+                    alert('Invalid index for tangent animation.');
+                    return;
+                }
+                let P0, P1, P2, P3;
+                if (i === 0) {
+                    P0 = controlPoints[0];
+                    P1 = controlPoints[0];
+                    P2 = controlPoints[1];
+                    P3 = controlPoints[2];
+                } else if (i === len - 2) {
+                    P0 = controlPoints[len - 3];
+                    P1 = controlPoints[len - 2];
+                    P2 = controlPoints[len - 1];
+                    P3 = controlPoints[len - 1];
+                } else {
+                    P0 = controlPoints[i - 1];
+                    P1 = controlPoints[i];
+                    P2 = controlPoints[i + 1];
+                    P3 = controlPoints[i + 2];
+                }
+                const duration = 1000; // Duration for each phase
+                animateCatmullRomControlPoint(scene, P0, P1, P2, bezierPointsMeshes, i, duration, 1);
+                setTimeout(() => {
+                    animateCatmullRomControlPoint(scene, P3, P2, P1, bezierPointsMeshes, i + 1, duration, 2);
+                }, duration * 3);
+                // Compute Bezier control points
+                const b_1 = P1.clone().add(P2.clone().sub(P0).multiplyScalar(1 / 6));
+                const b_2 = P2.clone().add(P1.clone().sub(P3).multiplyScalar(1 / 6));
+                // Animate de Casteljau's algorithm with the correct control points
+                setTimeout(() => {
+                    animateDeCasteljau(
+                        scene,
+                        [P1, b_1, b_2, P2],
+                        (t, group) => {
+                            // Optionally update labels or UI here during animation
+                        },
+                        5000 // duration in ms (optional)
+                    );
+                }, duration * 6);
             };
             contextMenuDiv.appendChild(animateOption);
 
@@ -206,6 +313,8 @@ export function setupInteraction(
         if (contextMenuDiv) {
             document.body.removeChild(contextMenuDiv);
             contextMenuDiv = null;
+            // Prevent next canvas click from creating a point
+            suppressNextCanvasClick = true;
         }
     }
 

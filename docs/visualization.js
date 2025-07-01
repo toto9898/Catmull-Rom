@@ -1,3 +1,15 @@
+import { showLatexFormula, showLatexCornerBox, PausableTimeout } from './latexBox.js';
+
+// Exported reference to the main curve line (for use in interaction.js)
+export let curveSegmentLine = null;
+export function setCurveLine(line) {
+    // Remove previous line from scene if present
+    if (curveSegmentLine && curveSegmentLine.parent) {
+        curveSegmentLine.parent.remove(curveSegmentLine);
+    }
+    curveSegmentLine = line;
+}
+
 /**
  * Visualizes a single step of de Casteljau's algorithm.
  * Draws lines and points for each interpolation level at parameter t.
@@ -10,7 +22,7 @@
 export function visualizeDeCasteljau(scene, controlPoints, t, opts = {}) {
     const group = new THREE.Group();
     let points = controlPoints.map(p => p.clone());
-    const color = opts.color || 0xff8800;
+    const color = opts.color || 0x00ff00; // green for Bezier construction
     const pointSize = opts.pointSize || 0.08;
 
     while (points.length > 1) {
@@ -55,128 +67,294 @@ export function visualizeDeCasteljau(scene, controlPoints, t, opts = {}) {
  * @param {Function} onUpdate - (t, group) => void
  * @param {number} [duration=2000] - Animation duration in ms
  */
-export function animateDeCasteljau(scene, controlPoints, onUpdate, duration = 2000) {
-    let start = null;
-    let group = null;
+export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duration = 2000) {
+    // Remove any previous construction helpers
+    let helpers = [];
+    function clearHelpers() {
+        helpers.forEach(obj => scene.remove(obj));
+        helpers = [];
+        // Do NOT remove curveSegmentLine here; it should only be removed on user interaction.
+    }
 
-    function animateStep(timestamp) {
-        if (!start) start = timestamp;
-        const elapsed = timestamp - start;
-        const t = Math.min(elapsed / duration, 1);
-
-        if (group) {
-            scene.remove(group);
+    // --- GLOBAL ANIMATION PAUSE/RESUME STATE ---
+    if (!window.__globalAnimationState) {
+        window.__globalAnimationState = {
+            paused: false,
+            subscribers: [],
+            setPaused(paused) {
+                this.paused = paused;
+                this.subscribers.forEach(fn => {
+                    try { fn(paused); } catch (e) { /* ignore */ }
+                });
+            },
+            subscribe(fn) {
+                this.subscribers.push(fn);
+                return () => {
+                    this.subscribers = this.subscribers.filter(f => f !== fn);
+                };
+            }
+        };
+    }
+    // --- Pause Button Show/Hide Utility ---
+    function setPauseButtonEnabled(enabled) {
+        const btn = document.getElementById('global-stop-btn');
+        if (!btn) return;
+        if (enabled) {
+            btn.style.display = '';
+            btn.disabled = false;
+        } else {
+            btn.style.display = 'none';
+            btn.disabled = true;
         }
-        group = visualizeDeCasteljau(scene, controlPoints, t);
-        if (onUpdate) onUpdate(t, group);
+        // Always reset text to 'Pause' when enabling
+        if (enabled) btn.textContent = window.__globalAnimationState && window.__globalAnimationState.paused ? 'Resume' : 'Pause';
+    }
 
-        if (t < 1) {
-            requestAnimationFrame(animateStep);
+    // Remove dynamic creation of the pause button, and instead only attach logic if the button exists
+    const globalPauseBtn = document.getElementById('global-stop-btn');
+    if (globalPauseBtn) {
+        globalPauseBtn.onclick = () => {
+            const state = window.__globalAnimationState;
+            state.setPaused(!state.paused);
+            globalPauseBtn.textContent = state.paused ? 'Resume' : 'Pause';
+        };
+    }
+
+    // --- Animation state for global stop/resume ---
+    let animationFrameId = null;
+    let animationElapsed = 0;
+    let pauseStart = null;
+    let unsub = null;
+
+    // Listen to global pause state
+    function onPauseChange(paused) {
+        if (!paused && animationFrameId === null) {
+            // Resume
+            requestAnimationFrame(animateFrame);
         }
     }
-    requestAnimationFrame(animateStep);
+    unsub = window.__globalAnimationState.subscribe(onPauseChange);
+
+    async function animateDeCasteljauVideoStyle() {
+        setPauseButtonEnabled(true);
+        clearHelpers();
+        const n = controlPoints.length - 1;
+        const levelColors = [0x888888, 0xff8800, 0x0077ff, 0x00cc44, 0xcc00cc]; // Use as many as needed
+        const pointColors = [0x888888, 0xffcc00, 0x0077ff, 0x00cc44, 0xcc00cc];
+        const steps = 100;
+        const bezierPoints = [];
+        for (let i = 0; i <= steps; i++) {
+            // de Casteljau for t
+            let pts = controlPoints.map(p => p.clone());
+            let t = i / steps;
+            for (let k = 1; k < pts.length; ++k) {
+                for (let j = 0; j < pts.length - k; ++j) {
+                    pts[j].lerp(pts[j + 1], t);
+                }
+            }
+            bezierPoints.push(pts[0].clone());
+        }
+        // Show Bernstein polynomial formula during the animation
+        // Use the actual degree for the formula
+        const degree = controlPoints.length - 1;
+        const bernsteinLatex =
+            `B_{${degree}}(t) = \\sum_{i=0}^{${degree}} \\binom{${degree}}{i} (1-t)^{${degree}-i} t^{i} \\mathbf{P}_{i}`;
+
+        // Triangle scheme in LaTeX (for up to cubic, generalizes for more)
+        let triangleLatex = [];
+        let trianglePoints = [];
+        if (degree === 2) {
+            triangleLatex = [
+                'P_0 \\qquad P_1 \\qquad P_2',
+                '\\qquad Q_0 \\qquad\\qquad Q_1',
+                '\\qquad\\qquad R_0'
+            ];
+            trianglePoints = [
+                [0,1,2], // P_0, P_1, P_2
+                [0,1],   // Q_0, Q_1
+                [0]      // R_0
+            ];
+        } else if (degree === 3) {
+            triangleLatex = [
+                'P_0 \\qquad P_1 \\qquad P_2 \\qquad P_3',
+                '\\qquad Q_0 \\qquad Q_1 \\qquad Q_2',
+                '\\qquad\\qquad R_0 \\qquad R_1',
+                '\\qquad\\qquad\\qquad S_0'
+            ];
+            trianglePoints = [
+                [0,1,2,3], // P_0..P_3
+                [0,1,2],   // Q_0..Q_2
+                [0,1],     // R_0, R_1
+                [0]        // S_0
+            ];
+        } else {
+            // Generic placeholder for higher degrees
+            triangleLatex = ["\\text{de Casteljau triangle scheme}"];
+            trianglePoints = [[]];
+        }
+
+        // Animate t from 0 to 1 over the given duration
+        let start = null;
+        function animateFrame(ts) {
+            // Use global pause state
+            if (window.__globalAnimationState && window.__globalAnimationState.paused) {
+                if (!pauseStart) pauseStart = ts;
+                animationFrameId = requestAnimationFrame(animateFrame);
+                return;
+            } else if (pauseStart) {
+                // Adjust start time by pause duration
+                start += ts - pauseStart;
+                pauseStart = null;
+            }
+            if (!start) {
+                start = ts - animationElapsed;
+                showLatexFormula(bernsteinLatex, duration);
+                // Show triangle scheme as separate lines at bottom-right
+                import('./latexBox.js').then(mod => {
+                    // Remove any previous boxes
+                    for (let i = 0; i < 6; ++i) {
+                        const old = document.getElementById('triangle-line-' + i);
+                        if (old) old.remove();
+                    }
+                    triangleLatex.forEach((line, idx) => {
+                        let box = document.createElement('div');
+                        box.id = 'triangle-line-' + idx;
+                        box.style.position = 'fixed';
+                        box.style.right = '2em';
+                        box.style.bottom = `calc(10em - ${idx * 2.2}em)`;
+                        box.style.background = 'rgba(30,30,30,0.95)';
+                        box.style.color = '#fff';
+                        box.style.padding = '6px 16px';
+                        box.style.borderRadius = '10px';
+                        box.style.boxShadow = '0 2px 12px rgba(0,0,0,0.3)';
+                        box.style.fontSize = '1.2em';
+                        box.style.zIndex = '10001';
+                        box.style.minWidth = '120px';
+                        box.style.textAlign = 'center';
+                        box.style.pointerEvents = 'none';
+                        box.style.opacity = '1';
+                        // Add colored points left of the LaTeX
+                        let pointsHtml = '';
+                        const colors = [
+                            '#ff0000', // gray
+                            '#ffcc00', // yellow
+                            '#0077ff', // blue
+                            '#00cc44', // green
+                            '#cc00cc'  // magenta
+                        ];
+                        if (trianglePoints[idx]) {
+                            trianglePoints[idx].forEach((ptIdx, j) => {
+                                const color = colors[idx] || '#fff';
+                                pointsHtml += `<span style="display:inline-block;width:0.9em;height:0.9em;border-radius:50%;background:${color};margin-right:0.4em;vertical-align:middle;"></span>`;
+                            });
+                        }
+                        box.innerHTML = pointsHtml + `\\(${line}\\)`;
+                        document.body.appendChild(box);
+                        if (window.MathJax && window.MathJax.typesetPromise) {
+                            MathJax.typesetPromise([box]);
+                        }
+                        if (duration) {
+                            new PausableTimeout(() => { box.remove(); }, duration + 200);
+                        }
+                    });
+                });
+            }
+            let elapsed = ts - start;
+            animationElapsed = elapsed;
+            let t = Math.min(elapsed / duration, 1);
+            let frame = Math.floor(t * steps);
+            clearHelpers();
+            // Draw control polygon (static, gray)
+            for (let i = 0; i < controlPoints.length - 1; i++) {
+                const geom = new THREE.BufferGeometry().setFromPoints([controlPoints[i], controlPoints[i + 1]]);
+                const mat = new THREE.LineBasicMaterial({ color: 0x444444, linewidth: 2 });
+                const line = new THREE.Line(geom, mat);
+                scene.add(line);
+                helpers.push(line);
+            }
+            // Draw all levels for current t
+            let levels = [controlPoints.map(p => p.clone())];
+            for (let level = 1; level <= n; ++level) {
+                const prev = levels[levels.length - 1];
+                const next = [];
+                for (let i = 0; i < prev.length - 1; ++i) {
+                    // Interpolated point
+                    const interp = prev[i].clone().lerp(prev[i + 1], t);
+                    next.push(interp);
+                    // Line for this level (always orange)
+                    const geom = new THREE.BufferGeometry().setFromPoints([prev[i], prev[i + 1]]);
+                    const mat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
+                    const line = new THREE.Line(geom, mat);
+                    scene.add(line);
+                    helpers.push(line);
+                }
+                // Points for this level (draw all, including the final green dot)
+                for (let i = 0; i < next.length; ++i) {
+                    const pt = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.09, 16, 16),
+                        new THREE.MeshBasicMaterial({ color: pointColors[level] || 0xffffff })
+                    );
+                    pt.position.copy(next[i]);
+                    scene.add(pt);
+                    helpers.push(pt);
+                }
+                levels.push(next);
+            }
+            // Draw Bezier curve so far
+            const curveSoFar = bezierPoints.slice(0, frame + 1);
+            const curveGeom = new THREE.BufferGeometry().setFromPoints(curveSoFar);
+            const curveMat = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 4 });
+            const newCurveLine = new THREE.Line(curveGeom, curveMat);
+            scene.add(newCurveLine);
+            setCurveLine(newCurveLine);
+            // Draw moving blue dot (only one per frame)
+            // (No blue dot; only the green dot is shown at the final interpolation point)
+            // Animate
+            if (t < 1) {
+                animationFrameId = requestAnimationFrame(animateFrame);
+            } else {
+                if (onUpdate) onUpdate(1, null);
+                new PausableTimeout(clearHelpers, 1200);
+                setPauseButtonEnabled(false);
+                // Remove stop button at end
+                const btn = document.getElementById('decasteljau-stop-btn');
+                if (btn) btn.remove();
+            }
+        }
+    animationFrameId = requestAnimationFrame(animateFrame);
+    }
+    animateDeCasteljauVideoStyle();
 }
 
-/**
- * Animates the construction of the second Catmull-Rom Bezier control point:
- * 1. Draws (P2 - P0) from P0 to P2.
- * 2. Animates scaling by 1/6.
- * 3. Animates translation to start from P1.
- * 4. Shows the resulting control point.
- * @param {THREE.Scene} scene
- * @param {THREE.Vector3} P0
- * @param {THREE.Vector3} P1
- * @param {THREE.Vector3} P2
- * @param {Function} [onComplete] - Called with the final control point position
- * @param {number} [duration=1800] - Total animation duration in ms
- */
-export function animateCatmullRomSecondControlPoint(scene, P0, P1, P2, yellowPointMeshes, index, duration = 1800) {
-    console.log('animateCatmullRomSecondControlPoint called', P0, P1, P2, scene);
-    
-    let vectorLine = null, scaledLine = null;
-    const phase1 = duration * 0.4; // Draw (P2-P0)
-    const phase2 = duration * 0.3; // Scale
-    const phase3 = duration * 0.3; // Translate
-
-    // 1. Animate (P2 - P0) from P0 to P2
-    const material = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 3 });
-    const geometry = new THREE.BufferGeometry().setFromPoints([P0.clone(), P0.clone()]);
-    vectorLine = new THREE.Line(geometry, material);
-    scene.add(vectorLine);
-
-    function animateVector(tsStart) {
-        function step(ts) {
-            const elapsed = ts - tsStart;
-            const t = Math.min(elapsed / phase1, 1);
-            const current = P0.clone().lerp(P2, t);
-            vectorLine.geometry.setFromPoints([P0, current]);
-            if (t < 1) {
-                requestAnimationFrame(step);
+// --- Global Animation Lock ---
+if (!window.__globalAnimationLock) {
+    window.__globalAnimationLock = {
+        _locked: false,
+        _queue: [],
+        async acquire() {
+            if (!this._locked) {
+                this._locked = true;
+                return;
+            }
+            return new Promise(resolve => this._queue.push(resolve));
+        },
+        release() {
+            if (this._queue.length > 0) {
+                const next = this._queue.shift();
+                next();
             } else {
-                // 2. Animate scaling by 1/6
-                animateScale(performance.now());
+                this._locked = false;
             }
         }
-        requestAnimationFrame(step);
+    };
+}
+
+// Wrap animation entry points to use the lock
+export async function animateDeCasteljau(scene, controlPoints, onUpdate, duration = 2000) {
+    await window.__globalAnimationLock.acquire();
+    try {
+        await _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duration);
+    } finally {
+        window.__globalAnimationLock.release();
     }
-
-    // 2. Animate scaling the vector by 1/6
-    function animateScale(tsStart) {
-        // Remove the full vector line
-        scene.remove(vectorLine);
-
-        const scaledMat = new THREE.LineBasicMaterial({ color: 0xff8800 });
-        scaledLine = new THREE.Line(new THREE.BufferGeometry(), scaledMat);
-        scene.add(scaledLine);
-
-        function step(ts) {
-            const elapsed = ts - tsStart;
-            const t = Math.min(elapsed / phase2, 1);
-            const scaledVec = P2.clone().sub(P0).multiplyScalar(t * (1 / 6));
-            const scaledEnd = P0.clone().add(scaledVec);
-            scaledLine.geometry.setFromPoints([P0, scaledEnd]);
-            if (t < 1) {
-                requestAnimationFrame(step);
-            } else {
-                // 3. Animate translation to P1
-                animateTranslate(performance.now(), scaledVec);
-            }
-        }
-        requestAnimationFrame(step);
-    }
-
-    // 3. Animate translation of the scaled vector to start at P1
-    function animateTranslate(tsStart, scaledVec) {
-        function step(ts) {
-            const elapsed = ts - tsStart;
-            const t = Math.min(elapsed / phase3, 1);
-            const tail = P0.clone().lerp(P1, t);
-            const head = tail.clone().add(scaledVec);
-            scaledLine.geometry.setFromPoints([tail, head]);
-            if (t < 1) {
-                requestAnimationFrame(step);
-            } else {
-                // 4. Show the resulting control point
-                if (yellowPointMeshes[index]) {
-                    scene.remove(yellowPointMeshes[index]);
-                }
-                const pointGeom = new THREE.SphereGeometry(0.12, 16, 16);
-                const pointMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-                const pointMesh = new THREE.Mesh(pointGeom, pointMat);
-                const finalPos = P1.clone().add(P2.clone().sub(P0).multiplyScalar(1 / 6));
-                pointMesh.position.copy(finalPos);
-                scene.add(pointMesh);
-                yellowPointMeshes[index] = pointMesh;
-
-                // Optionally remove helpers after a delay
-                setTimeout(() => {
-                    scene.remove(scaledLine);
-                    // Keep pointMesh if you want to show the result
-                }, 1000);
-            }
-        }
-        requestAnimationFrame(step);
-    }
-
-    animateVector(performance.now());
 }
