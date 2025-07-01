@@ -126,18 +126,20 @@ document.body.appendChild(animateBtn);
 animateBtn.onclick = () => {
     // Hide the legacy curveLine during animation
     if (curveLine) curveLine.visible = false;
+
+    const duration = 5000; // Animation duration in ms
     animateDeCasteljau(
         scene,
         controlPoints,
         (t, group) => {
             // Optionally update labels or UI here during animation
         },
-        1000 // duration in ms (optional)
+        duration
     ).finally(() => {
         // Restore the legacy curveLine after a pause-safe delay
         new PausableTimeout(() => {
             if (curveLine) curveLine.visible = true;
-        }, 1000); // 1000ms buffer; adjust as needed
+        }, duration);
     });
 };
 

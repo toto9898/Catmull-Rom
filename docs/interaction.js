@@ -278,7 +278,7 @@ export function setupInteraction(
                     P2 = controlPoints[i + 1];
                     P3 = controlPoints[i + 2];
                 }
-                const duration = 1000; // Duration for each phase
+                const duration = 3000; // Duration for each phase
                 animateCatmullRomControlPoint(scene, P0, P1, P2, bezierPointsMeshes, i, duration, 1);
                 setTimeout(() => {
                     animateCatmullRomControlPoint(scene, P3, P2, P1, bezierPointsMeshes, i + 1, duration, 2);

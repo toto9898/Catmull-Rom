@@ -291,7 +291,7 @@ export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duratio
                 // Points for this level (draw all, including the final green dot)
                 for (let i = 0; i < next.length; ++i) {
                     const pt = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.09, 16, 16),
+                        new THREE.SphereGeometry(0.07, 16, 16),
                         new THREE.MeshBasicMaterial({ color: pointColors[level] || 0xffffff })
                     );
                     pt.position.copy(next[i]);
