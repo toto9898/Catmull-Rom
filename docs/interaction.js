@@ -304,14 +304,86 @@ export function setupInteraction(
         }
     }
 
+
+    // --- Touch event support for mobile devices ---
+    function getTouchPos(touch) {
+        return {
+            x: (touch.clientX / window.innerWidth) * 2 - 1,
+            y: -(touch.clientY / window.innerHeight) * 2 + 1
+        };
+    }
+    function onTouchStart(event) {
+        // Only allow interaction with pause button during pause
+        if (window.__globalAnimationState && window.__globalAnimationState.paused) {
+            if (!(event.target && event.target.id === 'global-stop-btn')) return;
+        }
+        if (event.target && event.target.id === 'global-stop-btn') return;
+        if (isInteractionLocked()) return;
+        if (event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        const pos = getTouchPos(touch);
+        mouse.x = pos.x;
+        mouse.y = pos.y;
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(controlPointMeshes);
+        if (intersects.length > 0) {
+            selectedPoint = intersects[0].object;
+            dragStarted = true;
+            dragMoved = false;
+            event.preventDefault();
+        }
+    }
+    function onTouchMove(event) {
+        // Only allow interaction with pause button during pause
+        if (window.__globalAnimationState && window.__globalAnimationState.paused) {
+            if (!(event.target && event.target.id === 'global-stop-btn')) return;
+        }
+        if (event.target && event.target.id === 'global-stop-btn') return;
+        if (isInteractionLocked()) return;
+        if (!selectedPoint || event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        const pos = getTouchPos(touch);
+        mouse.x = pos.x;
+        mouse.y = pos.y;
+        raycaster.setFromCamera(mouse, camera);
+        // Move selected point
+        dragMoved = true;
+        const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        const planeIntersect = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(plane, planeIntersect)) {
+            selectedPoint.position.copy(planeIntersect);
+            updateCurve();
+        }
+        event.preventDefault();
+    }
+    function onTouchEnd(event) {
+        // Only allow interaction with pause button during pause
+        if (window.__globalAnimationState && window.__globalAnimationState.paused) {
+            if (!(event && event.target && event.target.id === 'global-stop-btn')) return;
+        }
+        if (event && event.target && event.target.id === 'global-stop-btn') return;
+        if (isInteractionLocked()) return;
+        if (selectedPoint && dragStarted && dragMoved) {
+            clearBezierPointsMeshes(scene);
+        }
+        selectedPoint = null;
+        dragStarted = false;
+        dragMoved = false;
+        event.preventDefault();
+    }
+
     window.addEventListener("mousedown", onMouseDown);
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
     window.addEventListener("contextmenu", onContextMenu);
 
+    // Touch events on canvas
     if (canvas) {
         canvas.addEventListener('click', onCanvasClick);
         canvas.addEventListener('contextmenu', onContextMenu);
+        canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+        canvas.addEventListener('touchend', onTouchEnd, { passive: false });
     }
     window.addEventListener('keydown', onKeyDown);
 
@@ -324,6 +396,9 @@ export function setupInteraction(
         if (canvas) {
             canvas.removeEventListener('click', onCanvasClick);
             canvas.removeEventListener('contextmenu', onContextMenu);
+            canvas.removeEventListener('touchstart', onTouchStart);
+            canvas.removeEventListener('touchmove', onTouchMove);
+            canvas.removeEventListener('touchend', onTouchEnd);
         }
         window.removeEventListener('keydown', onKeyDown);
         closeContextMenu();
