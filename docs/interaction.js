@@ -225,7 +225,7 @@ export function setupInteraction(
             
             // Add animation option
             const animateOption = document.createElement('div');
-            animateOption.textContent = 'Animate tangent construction';
+            animateOption.textContent = 'Animate catmull-rom segment';
             animateOption.style.cursor = 'pointer';
             animateOption.onmouseenter = () => animateOption.style.background = '#444';
             animateOption.onmouseleave = () => animateOption.style.background = 'none';
@@ -236,11 +236,11 @@ export function setupInteraction(
                 // Handle edge cases for i == 0 and i == len-2
                 const len = controlPoints.length;
                 if (len < 4) {
-                    alert('Need at least four points to animate tangent.');
+                    alert('Need at least four points to animate segment.');
                     return;
                 }
                 if (i < 0 || i > len - 2) {
-                    alert('Invalid index for tangent animation.');
+                    alert('Invalid index for segment animation.');
                     return;
                 }
                 let P0, P1, P2, P3;
