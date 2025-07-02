@@ -25,7 +25,6 @@ function clearBezierPointsMeshes(scene) {
  * @param {THREE.Camera} camera - The camera used for raycasting.
  * @param {THREE.Object3D[]} controlPointMeshes - Array of mesh objects representing control points.
  * @param {Function} updateCurve - Callback to update the curve when a point moves.
- * @param {Function} updateLabels - Callback to update labels when a point moves.
  * @param {Function} createHoverIndicator - Callback to show hover indicator.
  * @param {Function} removeHoverIndicator - Callback to hide hover indicator.
  * @param {Array} controlPoints - Array of control points.
@@ -38,7 +37,6 @@ export function setupInteraction(
     camera,
     controlPointMeshes,
     updateCurve,
-    updateLabels,
     createHoverIndicator,
     removeHoverIndicator,
     controlPoints = null,
@@ -108,20 +106,6 @@ export function setupInteraction(
             if (raycaster.ray.intersectPlane(plane, planeIntersect)) {
                 selectedPoint.position.copy(planeIntersect);
                 updateCurve();
-                updateLabels();
-
-                // Regenerate all yellow points from their red origins
-                for (let idx = 0; idx < yellowPointMeshes.length; idx++) {
-                    if (yellowPointMeshes[idx]) {
-                        if (idx > 0 && idx < controlPoints.length - 1) {
-                            const P0 = controlPoints[idx - 1];
-                            const P1 = controlPoints[idx];
-                            const P2 = controlPoints[idx + 1];
-                            const yellowPos = P1.clone().add(P2.clone().sub(P0).multiplyScalar(1 / 6));
-                            yellowPointMeshes[idx].position.copy(yellowPos);
-                        }
-                    }
-                }
             }
         }
     }
@@ -182,7 +166,6 @@ export function setupInteraction(
         yellowPointMeshes.push(undefined);
 
         updateCurve();
-        updateLabels();
     }
 
     // --- Ctrl+Z to remove last added point ---
@@ -200,7 +183,6 @@ export function setupInteraction(
                 // Remove last control point
                 controlPoints.pop();
                 updateCurve();
-                updateLabels();
             }
         }
     }
@@ -297,7 +279,8 @@ export function setupInteraction(
                         (t, group) => {
                             // Optionally update labels or UI here during animation
                         },
-                        5000 / currentSpeed // duration in ms (optional)
+                        5000 / currentSpeed, // duration in ms (optional)
+                        '#ffff00' // Middle point color
                     );
                 }, duration * 6);
             };

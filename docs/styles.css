@@ -36,20 +36,6 @@ button {
     top: 90px;
 }
 
-#toggle-labels {
-    position: absolute;
-    left: 10px;
-    top: 10px;
-    z-index: 10;
-    background: #222;
-    color: #fff;
-    font-size: 1.1em;
-    padding: 8px 18px;
-    border-radius: 8px;
-    border: 1px solid #888;
-    cursor: pointer;
-}
-
 #animate-with-labels {
     top: 170px;
 }

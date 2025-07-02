@@ -1,6 +1,6 @@
 import { createBezierCurve, createCatmullRomCurve } from './curves.js';
 import { setupInteraction } from './interaction.js';
-import { updateLabels, toggleLabels, updateAllLabels, createHoverIndicator, removeHoverIndicator } from './labels.js';
+import { createHoverIndicator, removeHoverIndicator } from './labels.js';
 import { visualizeDeCasteljau, animateDeCasteljau } from './visualization.js';
 import { showLatexFormula, PausableTimeout } from './latexBox.js';
 import { animateVectorScalingTo } from './vectorAnimation.js';
@@ -68,20 +68,11 @@ function updateCurve() {
     scene.add(curveLine);
 }
 
-// === Labels ===
-const labels = [];
-let labelsVisible = false;
-
-function handleUpdateAllLabels() {
-    updateAllLabels(controlPoints, camera, labels, labelsVisible);
-}
-
 // === Interaction ===
 setupInteraction(
     camera,
     controlPointMeshes,
     updateCurve,
-    handleUpdateAllLabels,
     (pos) => createHoverIndicator(pos, scene),
     () => removeHoverIndicator(scene),
     controlPoints,
@@ -96,29 +87,21 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    handleUpdateAllLabels();
 });
 
 // === Animation Loop ===
 function animate() {
     requestAnimationFrame(animate);
     renderer.render(scene, camera);
-    updateLabels(controlPoints, camera, labels);
 }
 animate();
-
-// === Example: Toggle Labels Button ===
-// Remove dynamic creation of the toggleBtn
-const toggleBtn = document.getElementById('toggle-labels');
-toggleBtn.onclick = () => {
-    labelsVisible = !labelsVisible;
-    toggleLabels(labels, labelsVisible);
-    handleUpdateAllLabels();
-};
 
 // Remove dynamic creation of the animateBtn
 const animateBtn = document.getElementById('animate-btn');
 animateBtn.onclick = () => {
+    // Save current state
+    const prevCurveLineVisible = curveLine ? curveLine.visible : undefined;
+    const prevCurveLineCheckboxChecked = curveLineCheckbox.checked;
     // Hide the legacy curveLine during animation
     if (curveLine) curveLine.visible = false;
     curveLineCheckbox.checked = false;
@@ -133,10 +116,10 @@ animateBtn.onclick = () => {
         },
         duration
     ).finally(() => {
-        // Restore the legacy curveLine after a pause-safe delay
+        // Restore the legacy curveLine and checkbox state after a pause-safe delay
         new PausableTimeout(() => {
-            if (curveLine) curveLine.visible = true;
-            curveLineCheckbox.checked = true;
+            if (curveLine && prevCurveLineVisible !== undefined) curveLine.visible = prevCurveLineVisible;
+            curveLineCheckbox.checked = prevCurveLineCheckboxChecked;
         }, duration);
     });
 };
@@ -154,3 +137,5 @@ speedSliderValue.textContent = speedSlider.value + 'x';
 
 // Initial draw
 updateCurve();
+
+export { camera, scene };

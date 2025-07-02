@@ -97,15 +97,12 @@ export function animateCatmullRomControlPoint(scene, P0, P1, P2, yellowPointMesh
                 formula: translateFormula,
                 onComplete: () => {
                     // 4. Show the resulting control point
-                    if (yellowPointMeshes[index]) {
-                        scene.remove(yellowPointMeshes[index]);
-                    }
                     const pointGeom = new THREE.SphereGeometry(0.07, 16, 16);
                     const pointMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
                     const pointMesh = new THREE.Mesh(pointGeom, pointMat);
                     pointMesh.position.copy(finalPos);
                     scene.add(pointMesh);
-                    yellowPointMeshes[index] = pointMesh;
+                    if (Array.isArray(yellowPointMeshes)) yellowPointMeshes.push(pointMesh);
                     // Remove the line after showing the point
                     scene.remove(line1);
                 }

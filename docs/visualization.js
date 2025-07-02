@@ -1,4 +1,30 @@
-import { showLatexFormula, showLatexCornerBox, PausableTimeout } from './latexBox.js';
+import { showLatexFormula, showLatexCornerBox, PausableTimeout, showLatexLabelsForControlPoints } from './latexBox.js';
+import { camera as appCamera, scene as appScene } from './app.js';
+/**
+ * Show LaTeX labels ('P₀', 'P₁', ...) under all Bezier control points if there are 3 or 4.
+ * @param {THREE.Vector3[]} bezierPoints - The control points.
+ * @param {THREE.Camera} camera - The camera for projection.
+ * @param {number} duration - Duration in ms to show the labels.
+ * @returns {Function|null} - A function to remove all labels, or null if not shown.
+ */
+let _bezierLabelRemovers = null;
+export function showBezierControlPointLabels(bezierPoints, camera) {
+    if (!Array.isArray(bezierPoints) || (bezierPoints.length !== 3 && bezierPoints.length !== 4)) return null;
+    // Remove any previous labels
+    if (_bezierLabelRemovers) {
+        _bezierLabelRemovers.forEach(fn => fn());
+        _bezierLabelRemovers = null;
+    }
+    // Use the batch labeling utility from latexBox.js
+    _bezierLabelRemovers = showLatexLabelsForControlPoints(bezierPoints, camera);
+    return _bezierLabelRemovers;
+}
+export function removeBezierControlPointLabels() {
+    if (_bezierLabelRemovers) {
+        _bezierLabelRemovers.forEach(fn => fn());
+        _bezierLabelRemovers = null;
+    }
+}
 
 // Exported reference to the main curve line(s) (for use in interaction.js)
 export let curveSegmentLine = [];
@@ -64,7 +90,7 @@ export function visualizeDeCasteljau(scene, controlPoints, t, opts = {}) {
 }
 
 // Show the de Casteljau triangle scheme as LaTeX overlays with colored dots
-function showTriangleLatex(degree, duration) {
+function showTriangleLatex(degree, duration, middlePColor = null) {
     // Triangle scheme in LaTeX (for up to cubic, generalizes for more)
     let triangleLatex = [];
     let trianglePoints = [];
@@ -96,6 +122,7 @@ function showTriangleLatex(degree, duration) {
         // Generic placeholder for higher degrees
         triangleLatex = ["\\text{de Casteljau triangle scheme}"];
         trianglePoints = [[]];
+        middlePColor = null;
     }
 
     import('./latexBox.js').then(mod => {
@@ -124,15 +151,24 @@ function showTriangleLatex(degree, duration) {
             // Add colored points left of the LaTeX
             let pointsHtml = '';
             const colors = [
-                '#ff0000', // gray
-                '#ffcc00', // yellow
+                '#ff0000', // for P row (overridden below)
+                '#ff8800', // yellow
                 '#0077ff', // blue
                 '#00cc44', // green
                 '#cc00cc'  // magenta
             ];
             if (trianglePoints[idx]) {
                 trianglePoints[idx].forEach((ptIdx, j) => {
-                    const color = colors[idx] || '#fff';
+                    let color = colors[idx] || '#fff';
+                    // For the first row (P row), use middlePColor only for middle points (not first/last)
+                    if (
+                        idx === 0 &&
+                        degree > 1 && degree < 4 &&
+                        middlePColor &&
+                        j !== 0 && j !== trianglePoints[idx].length - 1
+                    ) {
+                        color = middlePColor;
+                    }
                     pointsHtml += `<span style="display:inline-block;width:0.9em;height:0.9em;border-radius:50%;background:${color};margin-right:0.4em;vertical-align:middle;"></span>`;
                 });
             }
@@ -156,7 +192,7 @@ function showTriangleLatex(degree, duration) {
  * @param {Function} onUpdate - (t, group) => void
  * @param {number} [duration=2000] - Animation duration in ms
  */
-export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duration = 2000) {
+export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duration = 2000, middlePColor) {
     // Remove any previous construction helpers
     let helpers = [];
     function clearHelpers() {
@@ -216,11 +252,47 @@ export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duratio
     let unsub = null;
 
     // Listen to global pause state
-    function onPauseChange(paused) {
-        if (!paused && animationFrameId === null) {
-            // Resume
-            requestAnimationFrame(animateFrame);
+    // --- Show/hide Bezier control point labels on pause/resume ---
+    let lastPauseState = false;
+    // --- Robust camera detection for label overlays ---
+    function getCurrentCamera() {
+        // Prefer the camera exported from app.js
+        if (typeof appCamera !== 'undefined' && appCamera) return appCamera;
+        // Fallbacks (legacy)
+        if (scene && scene.camera) return scene.camera;
+        if (scene && scene.children) {
+            for (const obj of scene.children) {
+                if (obj.isCamera) return obj;
+                if (obj.type && obj.type.toLowerCase().includes('camera')) return obj;
+            }
         }
+        if (window._mainCamera) return window._mainCamera;
+        if (typeof camera !== 'undefined' && camera) return camera;
+        if (document && document._mainCamera) return document._mainCamera;
+        for (const k in window) {
+            if (k.toLowerCase().includes('camera') && window[k] && window[k].isCamera) {
+                return window[k];
+            }
+        }
+        return null;
+    }
+
+    function onPauseChange(paused) {
+        if (paused && !lastPauseState) {
+            // Show labels under control points
+            const cam = getCurrentCamera();
+            if (cam && controlPoints) {
+                showBezierControlPointLabels(controlPoints, cam);
+            }
+        } else if (!paused && lastPauseState) {
+            // Remove labels
+            removeBezierControlPointLabels();
+            if (animationFrameId === null) {
+                // Resume
+                requestAnimationFrame(animateFrame);
+            }
+        }
+        lastPauseState = paused;
     }
     unsub = window.__globalAnimationState.subscribe(onPauseChange);
 
@@ -228,8 +300,7 @@ export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duratio
         setPauseButtonEnabled(true);
         clearHelpers();
         const n = controlPoints.length - 1;
-        const levelColors = [0x888888, 0xff8800, 0x0077ff, 0x00cc44, 0xcc00cc]; // Use as many as needed
-        const pointColors = [0x888888, 0xffcc00, 0x0077ff, 0x00cc44, 0xcc00cc];
+        const pointColors = [0x888888, 0xff8800, 0x0077ff, 0x00cc44, 0xcc00cc];
         const steps = 100;
         const bezierPoints = [];
         for (let i = 0; i <= steps; i++) {
@@ -266,9 +337,8 @@ export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duratio
             if (!start) {
                 start = ts - animationElapsed;
                 showLatexFormula(bernsteinLatex, duration);
-    
                 // Show triangle scheme as separate lines at bottom-right
-                showTriangleLatex(degree, duration);
+                showTriangleLatex(degree, duration, middlePColor);
             }
             let elapsed = ts - start;
             animationElapsed = elapsed;
@@ -383,10 +453,10 @@ if (!window.__globalAnimationLock) {
 }
 
 // Wrap animation entry points to use the lock
-export async function animateDeCasteljau(scene, controlPoints, onUpdate, duration = 2000) {
+export async function animateDeCasteljau(scene, controlPoints, onUpdate, duration = 2000, middlePColor = '#ff0000') {
     await window.__globalAnimationLock.acquire();
     try {
-        await _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duration);
+        await _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duration, middlePColor);
     } finally {
         window.__globalAnimationLock.release();
     }
