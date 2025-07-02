@@ -2,6 +2,7 @@ import { animateCatmullRomControlPoint } from './catmullRomAnimation.js'; // Mak
 import { createBezierCurve } from './curves.js';
 import { animateDeCasteljau } from './visualization.js';
 
+
 const bezierPointsMeshes = [];
 
 // Import the main curve line reference from visualization.js
@@ -16,17 +17,7 @@ function clearBezierPointsMeshes(scene) {
         }
     }
     bezierPointsMeshes.length = 0;
-    // Remove the main curve line robustly, always from both parent and scene
-    if (curveSegmentLine) {
-        const parent = curveSegmentLine.parent;
-        if (parent && parent !== scene) {
-            parent.remove(curveSegmentLine);
-        }
-        if (scene.children.includes(curveSegmentLine)) {
-            scene.remove(curveSegmentLine);
-        }
-        setCurveLine(null);
-    }
+    setCurveLine(null, scene);
 }
 
 /**
@@ -67,6 +58,8 @@ export function setupInteraction(
         return window.__globalAnimationLock && window.__globalAnimationLock._locked;
     }
 
+    let dragStarted = false;
+    let dragMoved = false;
     function onMouseDown(event) {
         // Only allow interaction with pause button during pause
         if (window.__globalAnimationState && window.__globalAnimationState.paused) {
@@ -74,13 +67,16 @@ export function setupInteraction(
         }
         if (event.target && event.target.id === 'global-stop-btn') return;
         if (isInteractionLocked()) return;
-        clearBezierPointsMeshes(scene);
+        // Prevent dragging with right mouse button (button === 2)
+        if (event.button === 2) return;
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         raycaster.setFromCamera(mouse, camera);
         const intersects = raycaster.intersectObjects(controlPointMeshes);
         if (intersects.length > 0) {
             selectedPoint = intersects[0].object;
+            dragStarted = true;
+            dragMoved = false;
         }
     }
 
@@ -106,6 +102,7 @@ export function setupInteraction(
         }
 
         if (selectedPoint) {
+            dragMoved = true;
             const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
             const planeIntersect = new THREE.Vector3();
             if (raycaster.ray.intersectPlane(plane, planeIntersect)) {
@@ -136,8 +133,12 @@ export function setupInteraction(
         }
         if (event && event.target && event.target.id === 'global-stop-btn') return;
         if (isInteractionLocked()) return;
-        clearBezierPointsMeshes(scene);
+        if (selectedPoint && dragStarted && dragMoved) {
+            clearBezierPointsMeshes(scene);
+        }
         selectedPoint = null;
+        dragStarted = false;
+        dragMoved = false;
     }
 
     let suppressNextCanvasClick = false;
@@ -147,7 +148,6 @@ export function setupInteraction(
         }
         if (isInteractionLocked()) return;
         if (event.target && event.target.id === 'global-stop-btn') return;
-        clearBezierPointsMeshes(scene);
         if (suppressNextCanvasClick) {
             suppressNextCanvasClick = false;
             return;
@@ -156,6 +156,7 @@ export function setupInteraction(
         // Prevent adding if hovering a point
         if (isHoveringPoint) return;
 
+        clearBezierPointsMeshes(scene);
         const rect = canvas.getBoundingClientRect();
         const mouseNDC = new THREE.Vector2(
             ((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -209,7 +210,6 @@ export function setupInteraction(
         // Allow pause button to work
         if (event.target && event.target.id === 'global-stop-btn') return;
         if (isInteractionLocked()) return;
-        clearBezierPointsMeshes(scene);
         event.preventDefault();
 
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -278,7 +278,10 @@ export function setupInteraction(
                     P2 = controlPoints[i + 1];
                     P3 = controlPoints[i + 2];
                 }
-                const duration = 3000; // Duration for each phase
+                // Always get the latest speed from the slider
+                const speedSlider = document.getElementById('speed-slider');
+                const currentSpeed = speedSlider ? parseFloat(speedSlider.value) : 1;
+                const duration = 3000 / currentSpeed; // Duration for each phase
                 animateCatmullRomControlPoint(scene, P0, P1, P2, bezierPointsMeshes, i, duration, 1);
                 setTimeout(() => {
                     animateCatmullRomControlPoint(scene, P3, P2, P1, bezierPointsMeshes, i + 1, duration, 2);
@@ -294,7 +297,7 @@ export function setupInteraction(
                         (t, group) => {
                             // Optionally update labels or UI here during animation
                         },
-                        5000 // duration in ms (optional)
+                        5000 / currentSpeed // duration in ms (optional)
                     );
                 }, duration * 6);
             };

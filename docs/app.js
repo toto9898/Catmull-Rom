@@ -47,6 +47,11 @@ const controlPointMeshes = controlPoints.map((point) => {
 // === Curve Line (for legacy, not the main shared curve line) ===
 let curveLine = null;
 
+const curveLineCheckbox = document.getElementById('curveLine-visibility');
+curveLineCheckbox.addEventListener('change', () => {
+    if (curveLine) curveLine.visible = curveLineCheckbox.checked;
+});
+
 function updateCurve() {
     // Remove old curve
     if (curveLine) scene.remove(curveLine);
@@ -59,6 +64,7 @@ function updateCurve() {
     const geometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
     const material = new THREE.LineBasicMaterial({ color: 0x00ffff });
     curveLine = new THREE.Line(geometry, material);
+    curveLine.visible = curveLineCheckbox.checked;
     scene.add(curveLine);
 }
 
@@ -102,32 +108,23 @@ function animate() {
 animate();
 
 // === Example: Toggle Labels Button ===
-const toggleBtn = document.createElement('button');
-toggleBtn.textContent = 'Toggle Labels';
-toggleBtn.style.position = 'absolute';
-toggleBtn.style.left = '10px';
-toggleBtn.style.top = '10px';
+// Remove dynamic creation of the toggleBtn
+const toggleBtn = document.getElementById('toggle-labels');
 toggleBtn.onclick = () => {
     labelsVisible = !labelsVisible;
     toggleLabels(labels, labelsVisible);
     handleUpdateAllLabels();
 };
-document.body.appendChild(toggleBtn);
 
-// Add a button to trigger the animation
-const animateBtn = document.createElement('button');
-animateBtn.textContent = 'Animate de Casteljau using the red points';
-animateBtn.style.position = 'absolute';
-animateBtn.style.left = '10px';
-animateBtn.style.top = '90px';
-animateBtn.style.zIndex = '10';
-document.body.appendChild(animateBtn);
-
+// Remove dynamic creation of the animateBtn
+const animateBtn = document.getElementById('animate-btn');
 animateBtn.onclick = () => {
     // Hide the legacy curveLine during animation
     if (curveLine) curveLine.visible = false;
+    curveLineCheckbox.checked = false;
 
-    const duration = 5000; // Animation duration in ms
+    const baseDuration = 5000; // Base animation duration in ms
+    const duration = baseDuration / animationSpeed;
     animateDeCasteljau(
         scene,
         controlPoints,
@@ -139,9 +136,21 @@ animateBtn.onclick = () => {
         // Restore the legacy curveLine after a pause-safe delay
         new PausableTimeout(() => {
             if (curveLine) curveLine.visible = true;
+            curveLineCheckbox.checked = true;
         }, duration);
     });
 };
+
+// === Speed Slider ===
+let animationSpeed = 1;
+const speedSlider = document.getElementById('speed-slider');
+const speedSliderValue = document.getElementById('speed-slider-value');
+speedSlider.addEventListener('input', () => {
+    animationSpeed = parseFloat(speedSlider.value);
+    speedSliderValue.textContent = animationSpeed.toFixed(2) + 'x';
+});
+// Set initial value
+speedSliderValue.textContent = speedSlider.value + 'x';
 
 // Initial draw
 updateCurve();

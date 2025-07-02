@@ -9,8 +9,26 @@
 </head>
 <body>
     <canvas id="webgl-canvas"></canvas>
-    <button id="toggle-curve" style="position: absolute; top: 10px; left: 10px; z-index: 10;">Switch Curve</button>
     <button id="global-stop-btn" style="position: fixed; right: 2em; bottom: calc(10em + 3em); z-index: 10002; font-size: 1.1em; padding: 8px 18px; border-radius: 8px; background: #222; color: #fff; border: 1px solid #888; cursor: pointer; display: none;">Pause</button>
+    <label for="curveLine-visibility" style="position: absolute; left: 10px; top: 50px; z-index: 10; background: #222; color: #fff; font-size: 1.1em; padding: 8px 18px; border-radius: 8px; border: 1px solid #888; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+        <input type="checkbox" id="curveLine-visibility" checked style="width: 1.2em; height: 1.2em; margin: 0 8px 0 0; accent-color: #00ffff; cursor: pointer;">
+        Show final Catmul-Rom curve
+    </label>
+    <button id="animate-btn" class="main-btn" style="position: absolute; top: 90px; left: 10px; z-index: 10; font-size: 1.1em; padding: 8px 18px; border-radius: 8px; background: #222; color: #fff; border: 1px solid #888; cursor: pointer;">
+        Animate de Casteljau using the red points
+    </button>
+    <button id="toggle-labels" class="main-btn" style="position: absolute; top: 10px; left: 10px; z-index: 10; font-size: 1.1em; padding: 8px 18px; border-radius: 8px; background: #222; color: #fff; border: 1px solid #888; cursor: pointer;">
+        Toggle Labels
+    </button>
+    <div id="speed-slider-container" style="position: absolute; left: 10px; top: 140px; z-index: 10; width: 260px; background: #222; color: #fff; font-size: 1.1em; padding: 8px 18px; border-radius: 8px; border: 1px solid #888; display: flex; align-items: center; gap: 10px;">
+        <div style="width: 100%; display: flex; flex-direction: column; gap: 6px;">
+            <div style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <label for="speed-slider" style="margin: 0; white-space: nowrap;">Animation speed:</label>
+                <span id="speed-slider-value" style="min-width: 3.5em; max-width: 5em; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;">1x</span>
+            </div>
+            <input type="range" id="speed-slider" min="0.5" max="5" step="0.25" value="1" style="width: 100%; accent-color: #00ffff;">
+        </div>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script type="module" src="./app.js"></script>

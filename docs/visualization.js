@@ -1,13 +1,17 @@
 import { showLatexFormula, showLatexCornerBox, PausableTimeout } from './latexBox.js';
 
-// Exported reference to the main curve line (for use in interaction.js)
-export let curveSegmentLine = null;
+// Exported reference to the main curve line(s) (for use in interaction.js)
+export let curveSegmentLine = [];
 export function setCurveLine(line) {
-    // Remove previous line from scene if present
-    if (curveSegmentLine && curveSegmentLine.parent) {
-        curveSegmentLine.parent.remove(curveSegmentLine);
+    if (line === null) {
+        // Remove all lines from their parents
+        for (const l of curveSegmentLine) {
+            if (l && l.parent) l.parent.remove(l);
+        }
+        curveSegmentLine.length = 0;
+        return;
     }
-    curveSegmentLine = line;
+    curveSegmentLine.push(line);
 }
 
 /**
@@ -195,6 +199,7 @@ export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duratio
 
         // Animate t from 0 to 1 over the given duration
         let start = null;
+        let prevCurveLine = null;
         function animateFrame(ts) {
             // Use global pause state
             if (window.__globalAnimationState && window.__globalAnimationState.paused) {
@@ -305,8 +310,18 @@ export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duratio
             const curveGeom = new THREE.BufferGeometry().setFromPoints(curveSoFar);
             const curveMat = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 4 });
             const newCurveLine = new THREE.Line(curveGeom, curveMat);
+            // Remove previous curve line if it exists
+            if (prevCurveLine) {
+                scene.remove(prevCurveLine);
+                if (prevCurveLine.geometry && typeof prevCurveLine.geometry.dispose === 'function') prevCurveLine.geometry.dispose();
+                if (prevCurveLine.material && typeof prevCurveLine.material.dispose === 'function') prevCurveLine.material.dispose();
+            }
             scene.add(newCurveLine);
-            setCurveLine(newCurveLine);
+            prevCurveLine = newCurveLine;
+            // Only set the curve line reference on the last frame
+            if (t === 1) {
+                setCurveLine(newCurveLine);
+            }
             // Draw moving blue dot (only one per frame)
             // (No blue dot; only the green dot is shown at the final interpolation point)
             // Animate

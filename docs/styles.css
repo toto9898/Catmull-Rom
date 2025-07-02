@@ -28,10 +28,6 @@ button {
     cursor: pointer;
 }
 
-#toggle-curve {
-    top: 10px;
-}
-
 #visualize-algorithm {
     top: 50px;
 }
@@ -41,11 +37,35 @@ button {
 }
 
 #toggle-labels {
-    top: 130px;
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    z-index: 10;
+    background: #222;
+    color: #fff;
+    font-size: 1.1em;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid #888;
+    cursor: pointer;
 }
 
 #animate-with-labels {
     top: 170px;
+}
+
+#animate-btn {
+    position: absolute;
+    left: 10px;
+    top: 90px;
+    z-index: 10;
+    background: #222;
+    color: #fff;
+    font-size: 1.1em;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid #888;
+    cursor: pointer;
 }
 
 /* Checkbox and Slider */
@@ -69,4 +89,31 @@ button {
     /* The JS already sets these, but you can override or add more here */
     font-family: 'Segoe UI', 'Arial', sans-serif;
     pointer-events: none; /* So it doesn't block mouse events */
+}
+
+#speed-slider-container {
+    position: absolute;
+    left: 10px;
+    top: 140px;
+    z-index: 10;
+    width: 260px;
+    background: #222;
+    color: #fff;
+    font-size: 1.1em;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid #888;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#speed-slider {
+    flex: 1;
+    accent-color: #00ffff;
+}
+
+#speed-slider-value {
+    min-width: 3em;
+    text-align: right;
 }
