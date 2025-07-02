@@ -63,6 +63,91 @@ export function visualizeDeCasteljau(scene, controlPoints, t, opts = {}) {
     return group;
 }
 
+// Show the de Casteljau triangle scheme as LaTeX overlays with colored dots
+function showTriangleLatex(degree, duration) {
+    // Triangle scheme in LaTeX (for up to cubic, generalizes for more)
+    let triangleLatex = [];
+    let trianglePoints = [];
+    if (degree === 2) {
+        triangleLatex = [
+            'P_0 \\qquad P_1 \\qquad P_2',
+            '\\qquad Q_0 \\qquad\\qquad Q_1',
+            '\\qquad\\qquad R_0'
+        ];
+        trianglePoints = [
+            [0,1,2], // P_0, P_1, P_2
+            [0,1],   // Q_0, Q_1
+            [0]      // R_0
+        ];
+    } else if (degree === 3) {
+        triangleLatex = [
+            'P_0 \\qquad P_1 \\qquad P_2 \\qquad P_3',
+            '\\qquad Q_0 \\qquad Q_1 \\qquad Q_2',
+            '\\qquad\\qquad R_0 \\qquad R_1',
+            '\\qquad\\qquad\\qquad S_0'
+        ];
+        trianglePoints = [
+            [0,1,2,3], // P_0..P_3
+            [0,1,2],   // Q_0..Q_2
+            [0,1],     // R_0, R_1
+            [0]        // S_0
+        ];
+    } else {
+        // Generic placeholder for higher degrees
+        triangleLatex = ["\\text{de Casteljau triangle scheme}"];
+        trianglePoints = [[]];
+    }
+
+    import('./latexBox.js').then(mod => {
+        // Remove any previous boxes
+        for (let i = 0; i < 6; ++i) {
+            const old = document.getElementById('triangle-line-' + i);
+            if (old) old.remove();
+        }
+        triangleLatex.forEach((line, idx) => {
+            let box = document.createElement('div');
+            box.id = 'triangle-line-' + idx;
+            box.style.position = 'fixed';
+            box.style.right = '2em';
+            box.style.bottom = `calc(10em - ${idx * 2.2}em)`;
+            box.style.background = 'rgba(30,30,30,0.95)';
+            box.style.color = '#fff';
+            box.style.padding = '6px 16px';
+            box.style.borderRadius = '10px';
+            box.style.boxShadow = '0 2px 12px rgba(0,0,0,0.3)';
+            box.style.fontSize = '1.2em';
+            box.style.zIndex = '10001';
+            box.style.minWidth = '120px';
+            box.style.textAlign = 'center';
+            box.style.pointerEvents = 'none';
+            box.style.opacity = '1';
+            // Add colored points left of the LaTeX
+            let pointsHtml = '';
+            const colors = [
+                '#ff0000', // gray
+                '#ffcc00', // yellow
+                '#0077ff', // blue
+                '#00cc44', // green
+                '#cc00cc'  // magenta
+            ];
+            if (trianglePoints[idx]) {
+                trianglePoints[idx].forEach((ptIdx, j) => {
+                    const color = colors[idx] || '#fff';
+                    pointsHtml += `<span style="display:inline-block;width:0.9em;height:0.9em;border-radius:50%;background:${color};margin-right:0.4em;vertical-align:middle;"></span>`;
+                });
+            }
+            box.innerHTML = pointsHtml + `\\(${line}\\)`;
+            document.body.appendChild(box);
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise([box]);
+            }
+            if (duration) {
+                new PausableTimeout(() => { box.remove(); }, duration + 200);
+            }
+        });
+    });
+}
+
 /**
  * Animates de Casteljau's algorithm from t=0 to t=1.
  * Calls a callback with the current t and visualization group.
@@ -164,39 +249,6 @@ export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duratio
         const bernsteinLatex =
             `B_{${degree}}(t) = \\sum_{i=0}^{${degree}} \\binom{${degree}}{i} (1-t)^{${degree}-i} t^{i} \\mathbf{P}_{i}`;
 
-        // Triangle scheme in LaTeX (for up to cubic, generalizes for more)
-        let triangleLatex = [];
-        let trianglePoints = [];
-        if (degree === 2) {
-            triangleLatex = [
-                'P_0 \\qquad P_1 \\qquad P_2',
-                '\\qquad Q_0 \\qquad\\qquad Q_1',
-                '\\qquad\\qquad R_0'
-            ];
-            trianglePoints = [
-                [0,1,2], // P_0, P_1, P_2
-                [0,1],   // Q_0, Q_1
-                [0]      // R_0
-            ];
-        } else if (degree === 3) {
-            triangleLatex = [
-                'P_0 \\qquad P_1 \\qquad P_2 \\qquad P_3',
-                '\\qquad Q_0 \\qquad Q_1 \\qquad Q_2',
-                '\\qquad\\qquad R_0 \\qquad R_1',
-                '\\qquad\\qquad\\qquad S_0'
-            ];
-            trianglePoints = [
-                [0,1,2,3], // P_0..P_3
-                [0,1,2],   // Q_0..Q_2
-                [0,1],     // R_0, R_1
-                [0]        // S_0
-            ];
-        } else {
-            // Generic placeholder for higher degrees
-            triangleLatex = ["\\text{de Casteljau triangle scheme}"];
-            trianglePoints = [[]];
-        }
-
         // Animate t from 0 to 1 over the given duration
         let start = null;
         let prevCurveLine = null;
@@ -214,55 +266,9 @@ export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duratio
             if (!start) {
                 start = ts - animationElapsed;
                 showLatexFormula(bernsteinLatex, duration);
+    
                 // Show triangle scheme as separate lines at bottom-right
-                import('./latexBox.js').then(mod => {
-                    // Remove any previous boxes
-                    for (let i = 0; i < 6; ++i) {
-                        const old = document.getElementById('triangle-line-' + i);
-                        if (old) old.remove();
-                    }
-                    triangleLatex.forEach((line, idx) => {
-                        let box = document.createElement('div');
-                        box.id = 'triangle-line-' + idx;
-                        box.style.position = 'fixed';
-                        box.style.right = '2em';
-                        box.style.bottom = `calc(10em - ${idx * 2.2}em)`;
-                        box.style.background = 'rgba(30,30,30,0.95)';
-                        box.style.color = '#fff';
-                        box.style.padding = '6px 16px';
-                        box.style.borderRadius = '10px';
-                        box.style.boxShadow = '0 2px 12px rgba(0,0,0,0.3)';
-                        box.style.fontSize = '1.2em';
-                        box.style.zIndex = '10001';
-                        box.style.minWidth = '120px';
-                        box.style.textAlign = 'center';
-                        box.style.pointerEvents = 'none';
-                        box.style.opacity = '1';
-                        // Add colored points left of the LaTeX
-                        let pointsHtml = '';
-                        const colors = [
-                            '#ff0000', // gray
-                            '#ffcc00', // yellow
-                            '#0077ff', // blue
-                            '#00cc44', // green
-                            '#cc00cc'  // magenta
-                        ];
-                        if (trianglePoints[idx]) {
-                            trianglePoints[idx].forEach((ptIdx, j) => {
-                                const color = colors[idx] || '#fff';
-                                pointsHtml += `<span style="display:inline-block;width:0.9em;height:0.9em;border-radius:50%;background:${color};margin-right:0.4em;vertical-align:middle;"></span>`;
-                            });
-                        }
-                        box.innerHTML = pointsHtml + `\\(${line}\\)`;
-                        document.body.appendChild(box);
-                        if (window.MathJax && window.MathJax.typesetPromise) {
-                            MathJax.typesetPromise([box]);
-                        }
-                        if (duration) {
-                            new PausableTimeout(() => { box.remove(); }, duration + 200);
-                        }
-                    });
-                });
+                showTriangleLatex(degree, duration);
             }
             let elapsed = ts - start;
             animationElapsed = elapsed;
@@ -286,12 +292,24 @@ export function _orig_animateDeCasteljau(scene, controlPoints, onUpdate, duratio
                     // Interpolated point
                     const interp = prev[i].clone().lerp(prev[i + 1], t);
                     next.push(interp);
-                    // Line for this level (always orange)
-                    const geom = new THREE.BufferGeometry().setFromPoints([prev[i], prev[i + 1]]);
-                    const mat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
-                    const line = new THREE.Line(geom, mat);
-                    scene.add(line);
-                    helpers.push(line);
+                    // Draw two lines: first part pink (ratio t), second part orange (ratio 1-t)
+                    const mid = prev[i].clone().lerp(prev[i + 1], t);
+                    // First segment: prev[i] to mid (pink, length t)
+                    if (t > 0) {
+                        const geom1 = new THREE.BufferGeometry().setFromPoints([prev[i], mid]);
+                        const mat1 = new THREE.LineBasicMaterial({ color: 0xcc00cc, linewidth: 3 });
+                        const line1 = new THREE.Line(geom1, mat1);
+                        scene.add(line1);
+                        helpers.push(line1);
+                    }
+                    // Second segment: mid to prev[i+1] (orange, length 1-t)
+                    if (t < 1) {
+                        const geom2 = new THREE.BufferGeometry().setFromPoints([mid, prev[i + 1]]);
+                        const mat2 = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
+                        const line2 = new THREE.Line(geom2, mat2);
+                        scene.add(line2);
+                        helpers.push(line2);
+                    }
                 }
                 // Points for this level (draw all, including the final green dot)
                 for (let i = 0; i < next.length; ++i) {
